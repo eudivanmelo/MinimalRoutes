@@ -46,22 +46,11 @@ Este projeto foi desenvolvido para a disciplina de Estrutura de Dados Não Linea
 
 ## Compilação e Execução
 
-### Windows
-
-```powershell
-# Compilar o projeto
-dotnet build
-
-# Executar (modo normal)
-dotnet run
-
-# Executar com logs de debug
-dotnet run --debug
-```
-
-### Linux
-
 ```bash
+# Clonar o repositório
+git clone https://github.com/eudivanmelo/MinimalRoutes
+cd MinimalRoutes
+
 # Compilar o projeto
 dotnet build
 

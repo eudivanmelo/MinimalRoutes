@@ -126,16 +126,24 @@ public class MainGame : Game
     
     private void ChangeGraphButton_Click(object sender, System.EventArgs e)
     {
-        _currentGraphType = _currentGraphType == GraphType.Simple ? GraphType.Complex : GraphType.Simple;
-        _changeGraphButton.Text = _currentGraphType == GraphType.Simple ? "Grafo Simples" : "Grafo Complexo";
-        
-        _graphVisualizer?.LoadGraph(GraphData.GetGraphData(_currentGraphType));
-        _graphVisualizer?.ClearHighlightedPath();
-        
-        lock (_lockObject)
+        _currentGraphType = _currentGraphType switch
         {
-            _lastResult = null;
-        }
+            GraphType.Simple => GraphType.Complex,
+            GraphType.Complex => GraphType.VeryComplex,
+            GraphType.VeryComplex => GraphType.Simple,
+            _ => throw new NotImplementedException()
+        };
+
+        _graphVisualizer?.ClearHighlightedPath();
+        _graphVisualizer?.LoadGraph(GraphData.GetGraphData(_currentGraphType));
+        
+        _changeGraphButton.Text = _currentGraphType switch
+        {
+            GraphType.Simple => "Grafo Simples",
+            GraphType.Complex => "Grafo Complexo",
+            GraphType.VeryComplex => "Muito Complexo",
+            _ => throw new NotImplementedException()
+        };
     }
     
     private void BruteForceButton_Click(object sender, System.EventArgs e)
@@ -369,7 +377,7 @@ public class MainGame : Game
     private void DrawSearchInfo(Vector2 graphOffset)
     {
         int infoX = SidebarWidth + GraphAreaMargin + 10;
-        int infoY = _graphics.PreferredBackBufferHeight - 120;
+        int infoY = _graphics.PreferredBackBufferHeight - 130;
         
         lock (_lockObject)
         {
