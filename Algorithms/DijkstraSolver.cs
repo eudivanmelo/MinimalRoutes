@@ -11,19 +11,16 @@ public class DijkstraSolver
     private readonly int _numNodes;
     private readonly object _lock = new();
 
-    // Classe para representar um estado na fila de prioridade
     private class SearchState : IComparable<SearchState>
     {
         public int CurrentNode { get; set; }
         public List<int> Path { get; set; }
         public HashSet<int> Visited { get; set; }
         public int CurrentDistance { get; set; }
-        public int EstimatedTotal { get; set; } // Distância atual + estimativa do resto
 
         public int CompareTo(SearchState other)
         {
-            // Menor distância estimada tem prioridade
-            return EstimatedTotal.CompareTo(other.EstimatedTotal);
+            return CurrentDistance.CompareTo(other.CurrentDistance);
         }
     }
 
@@ -40,7 +37,7 @@ public class DijkstraSolver
         { 
             lock (_lock) 
             { 
-                return new List<int>(_currentPath); 
+                return [.. _currentPath]; 
             } 
         } 
     }
@@ -57,41 +54,9 @@ public class DijkstraSolver
         {
             lock (_lock)
             {
-                return new List<string>(_logs);
+                return [.. _logs];
             }
         }
-    }
-
-    // Calcula estimativa de distância mínima restante (heurística)
-    private int CalculateLowerBound(HashSet<int> visited, int currentNode)
-    {
-        if (visited.Count == _numNodes)
-            return 0;
-
-        // Encontra as menores arestas não visitadas
-        int minEdge = int.MaxValue;
-        
-        for (int i = 0; i < _numNodes; i++)
-        {
-            if (visited.Contains(i))
-                continue;
-                
-            for (int j = 0; j < _numNodes; j++)
-            {
-                if (i == j || visited.Contains(j))
-                    continue;
-                    
-                int? distance = _distanceMatrix[i, j];
-                if (distance.HasValue && distance.Value > 0 && distance.Value < minEdge)
-                {
-                    minEdge = distance.Value;
-                }
-            }
-        }
-        
-        // Estimativa conservadora: menor aresta * nós restantes
-        int nodesRemaining = _numNodes - visited.Count;
-        return minEdge != int.MaxValue ? minEdge * nodesRemaining : 0;
     }
 
     public SolverResult Solve(int startNode, int endNode, Action<List<int>> onPathUpdate = null, bool enableLog = false)
@@ -130,7 +95,6 @@ public class DijkstraSolver
             int bestDistance = int.MaxValue;
             List<int> bestPath = null;
 
-            // Fila de prioridade - explora caminhos mais promissores primeiro
             PriorityQueue<SearchState, int> priorityQueue = new();
             
             // Estado inicial
@@ -139,14 +103,12 @@ public class DijkstraSolver
                 CurrentNode = startNode,
                 Path = new List<int> { startNode },
                 Visited = new HashSet<int> { startNode },
-                CurrentDistance = 0,
-                EstimatedTotal = CalculateLowerBound(new HashSet<int> { startNode }, startNode)
+                CurrentDistance = 0
             };
             
-            priorityQueue.Enqueue(initialState, initialState.EstimatedTotal);
+            priorityQueue.Enqueue(initialState, initialState.CurrentDistance);
 
-            // Armazena a melhor distância para cada estado (nó atual + conjunto visitados)
-            Dictionary<string, int> bestKnown = new();
+            Dictionary<string, int> bestKnown = [];
 
             while (priorityQueue.Count > 0)
             {
@@ -157,16 +119,17 @@ public class DijkstraSolver
                 {
                     lock (_lock)
                     {
-                        _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", state.Path)}] | Distância: {state.CurrentDistance} | Estimativa Total: {state.EstimatedTotal}");
+                        // REMOVER menção a EstimatedTotal
+                        _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", state.Path)}] | Distância: {state.CurrentDistance}");
                     }
                 }
                 
                 // Atualiza caminho atual para visualização
                 lock (_lock)
                 {
-                    _currentPath = new List<int>(state.Path);
+                    _currentPath = [.. state.Path];
                 }
-                onPathUpdate?.Invoke(new List<int>(state.Path));
+                onPathUpdate?.Invoke([.. state.Path]);
 
                 // Poda: se a distância atual já é >= melhor encontrada, ignora
                 if (state.CurrentDistance >= bestDistance)
@@ -194,7 +157,7 @@ public class DijkstraSolver
                         {
                             PathsExplored++;
                             bestDistance = totalDistance;
-                            bestPath = new List<int>(state.Path);
+                            bestPath = [.. state.Path];
                             bestPath.Add(startNode);
                             BestDistanceSoFar = bestDistance;
                             
@@ -208,10 +171,10 @@ public class DijkstraSolver
                             
                             lock (_lock)
                             {
-                                _currentPath = new List<int>(bestPath);
+                                _currentPath = [.. bestPath];
                             }
                             
-                            onPathUpdate?.Invoke(new List<int>(bestPath));
+                            onPathUpdate?.Invoke([.. bestPath]);
                         }
                     }
                     continue;
@@ -255,22 +218,17 @@ public class DijkstraSolver
 
                     // Cria novo estado
                     var newVisited = new HashSet<int>(state.Visited) { nextNode };
-                    int lowerBound = CalculateLowerBound(newVisited, nextNode);
                     
                     var newState = new SearchState
                     {
                         CurrentNode = nextNode,
                         Path = new List<int>(state.Path) { nextNode },
                         Visited = newVisited,
-                        CurrentDistance = newDistance,
-                        EstimatedTotal = newDistance + lowerBound
+                        CurrentDistance = newDistance
                     };
 
-                    // Poda com estimativa: se estimativa total já é pior, nem adiciona
-                    if (newState.EstimatedTotal >= bestDistance)
-                        continue;
-
-                    priorityQueue.Enqueue(newState, newState.EstimatedTotal);
+                    // MUDAR enqueue para usar apenas distância real
+                    priorityQueue.Enqueue(newState, newState.CurrentDistance);
                 }
             }
 

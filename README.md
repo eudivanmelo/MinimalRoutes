@@ -96,8 +96,8 @@ Exemplo de resultados em grafo complexo (18 nós):
 
 | Algoritmo | Caminhos Parciais | Tempo |
 |-----------|------------------|-------|
-| Brute Force | 1.833.869 | ~0,69s |
-| Dijkstra TSP | 90.660 | ~0,41s |
+| Brute Force | 1.833.869 | ~0,78s |
+| Dijkstra TSP | 207.443 | ~0,61s |
 
 ## Licença
 
