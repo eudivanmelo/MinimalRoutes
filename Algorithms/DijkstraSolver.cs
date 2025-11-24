@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 
 namespace MinimalRoutes.Algorithms;
 
-public class DijkstraSolver
+public class DijkstraSolver(int?[,] distanceMatrix)
 {
-    private readonly int?[,] _distanceMatrix;
-    private readonly int _numNodes;
-    private readonly object _lock = new();
+    private readonly int?[,] _distanceMatrix = distanceMatrix;
+    private readonly int _numNodes = distanceMatrix.GetLength(0);
+    private readonly Lock _lock = new();
 
     private class SearchState : IComparable<SearchState>
     {
@@ -24,13 +25,7 @@ public class DijkstraSolver
         }
     }
 
-    public DijkstraSolver(int?[,] distanceMatrix)
-    {
-        _distanceMatrix = distanceMatrix;
-        _numNodes = distanceMatrix.GetLength(0);
-    }
-
-    private List<int> _currentPath = new();
+    private List<int> _currentPath = [];
     public List<int> CurrentPath 
     { 
         get 
@@ -47,7 +42,7 @@ public class DijkstraSolver
     public int BestDistanceSoFar { get; private set; } = int.MaxValue;
     public bool IsRunning { get; private set; }
     
-    private List<string> _logs = new();
+    private readonly List<string> _logs = [];
     public List<string> Logs
     {
         get
@@ -97,12 +92,11 @@ public class DijkstraSolver
 
             PriorityQueue<SearchState, int> priorityQueue = new();
             
-            // Estado inicial
             var initialState = new SearchState
             {
                 CurrentNode = startNode,
-                Path = new List<int> { startNode },
-                Visited = new HashSet<int> { startNode },
+                Path = [startNode],
+                Visited = [startNode],
                 CurrentDistance = 0
             };
             
@@ -119,19 +113,16 @@ public class DijkstraSolver
                 {
                     lock (_lock)
                     {
-                        // REMOVER menção a EstimatedTotal
                         _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", state.Path)}] | Distância: {state.CurrentDistance}");
                     }
                 }
                 
-                // Atualiza caminho atual para visualização
                 lock (_lock)
                 {
                     _currentPath = [.. state.Path];
                 }
                 onPathUpdate?.Invoke([.. state.Path]);
 
-                // Poda: se a distância atual já é >= melhor encontrada, ignora
                 if (state.CurrentDistance >= bestDistance)
                 {
                     if (enableLog)
@@ -144,10 +135,8 @@ public class DijkstraSolver
                     continue;
                 }
 
-                // Verifica se visitou todos os nós
                 if (state.Visited.Count == _numNodes)
                 {
-                    // Tenta retornar ao início
                     int? returnDistance = _distanceMatrix[state.CurrentNode, startNode];
                     if (returnDistance.HasValue && returnDistance.Value > 0)
                     {
@@ -180,10 +169,8 @@ public class DijkstraSolver
                     continue;
                 }
 
-                // Gera chave para memoização (estado = nó atual + conjunto visitados)
                 string stateKey = $"{state.CurrentNode}:{string.Join(",", state.Visited.Order())}";
                 
-                // Poda por memoização: se já encontramos este estado com distância menor, ignora
                 if (bestKnown.TryGetValue(stateKey, out int knownDistance))
                 {
                     if (state.CurrentDistance >= knownDistance)
@@ -200,7 +187,6 @@ public class DijkstraSolver
                 }
                 bestKnown[stateKey] = state.CurrentDistance;
 
-                // Explora todos os vizinhos não visitados
                 for (int nextNode = 0; nextNode < _numNodes; nextNode++)
                 {
                     if (state.Visited.Contains(nextNode))
@@ -212,22 +198,19 @@ public class DijkstraSolver
 
                     int newDistance = state.CurrentDistance + distance.Value;
                     
-                    // Poda: não adiciona à fila se já é pior que a melhor solução
                     if (newDistance >= bestDistance)
                         continue;
 
-                    // Cria novo estado
                     var newVisited = new HashSet<int>(state.Visited) { nextNode };
                     
                     var newState = new SearchState
                     {
                         CurrentNode = nextNode,
-                        Path = new List<int>(state.Path) { nextNode },
+                        Path = [.. state.Path, nextNode],
                         Visited = newVisited,
                         CurrentDistance = newDistance
                     };
 
-                    // MUDAR enqueue para usar apenas distância real
                     priorityQueue.Enqueue(newState, newState.CurrentDistance);
                 }
             }
@@ -259,7 +242,7 @@ public class DijkstraSolver
             else
             {
                 result.Success = false;
-                result.Message = "Não foi possível encontrar um ciclo hamiltoniano";
+                result.Message = "Não foi possível encontrar um caminho válido";
                 result.ElapsedTime = stopwatch.Elapsed;
                 result.PartialPathsExplored = PartialPathsExplored;
             }
