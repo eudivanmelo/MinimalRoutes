@@ -84,6 +84,8 @@ public class MainGame : Game
         int graphHeight = _graphics.PreferredBackBufferHeight - GraphAreaMargin * 2;
         
         _graphVisualizer = new GraphVisualizer(GraphicsDevice, _font, graphWidth, graphHeight);
+        _graphVisualizer?.SetStartNode(0);
+        _graphVisualizer?.SetEndNode(GraphData.GetGraphData(_currentGraphType).GetLength(0) - 1);
         _graphVisualizer.LoadGraph(GraphData.GetGraphData(_currentGraphType));
     }
     
@@ -103,10 +105,10 @@ public class MainGame : Game
         _bruteForceButton = CreateButton(x, algorithmY, "Força Bruta", new(180, 50, 50), new(200, 70, 70));
         _bruteForceButton.Click += BruteForceButton_Click;
 
-        _dijkstraButton = CreateButton(x, algorithmY + ButtonHeight + ButtonSpacing, "Dijkstra TSP", new(50, 180, 50), new(70, 200, 70));
+        _dijkstraButton = CreateButton(x, algorithmY + ButtonHeight + ButtonSpacing, "Dijkstra", new(50, 180, 50), new(70, 200, 70));
         _dijkstraButton.Click += DijkstraButton_Click;
 
-        _aStarButton = CreateButton(x, algorithmY + (ButtonHeight + ButtonSpacing) * 2, "A* TSP", new(180, 180, 50), new(200, 200, 70));
+        _aStarButton = CreateButton(x, algorithmY + (ButtonHeight + ButtonSpacing) * 2, "A* (Desabilitado)", new(180, 180, 50), new(200, 200, 70));
         _aStarButton.Click += AStarButton_Click;
         _aStarButton.Disable();
     }
@@ -135,6 +137,8 @@ public class MainGame : Game
         };
 
         _graphVisualizer?.ClearHighlightedPath();
+        _graphVisualizer?.SetStartNode(0);
+        _graphVisualizer?.SetEndNode(GraphData.GetGraphData(_currentGraphType).GetLength(0) - 1);
         _graphVisualizer?.LoadGraph(GraphData.GetGraphData(_currentGraphType));
         
         _changeGraphButton.Text = _currentGraphType switch
@@ -144,6 +148,7 @@ public class MainGame : Game
             GraphType.VeryComplex => "Muito Complexo",
             _ => throw new NotImplementedException()
         };
+
     }
     
     private void BruteForceButton_Click(object sender, System.EventArgs e)
@@ -174,12 +179,16 @@ public class MainGame : Game
             {
                 try
                 {
-                    var result = _bruteForceSolver.Solve(0, 0, (path) =>
+                    // Usa nós selecionados ou padrão (0 e último)
+                    int startNode = _graphVisualizer.SelectedStartNode ?? 0;
+                    int endNode = _graphVisualizer.SelectedEndNode ?? (nodeCount - 1);
+                    
+                    var result = _bruteForceSolver.Solve(startNode, endNode, (path) =>
                     {
                         // Enfileira atualização para thread principal
                         lock (_queueLock)
                         {
-                            _pathUpdateQueue.Enqueue(new List<int>(path));
+                            _pathUpdateQueue.Enqueue([.. path]);
                         }
                     }, _debugMode);
                     
@@ -250,12 +259,16 @@ public class MainGame : Game
             {
                 try
                 {
-                    var result = _dijkstraSolver.Solve(0, 0, (path) =>
+                    // Usa nós selecionados ou padrão (0 e último)
+                    int startNode = _graphVisualizer.SelectedStartNode ?? 0;
+                    int endNode = _graphVisualizer.SelectedEndNode ?? (nodeCount - 1);
+                    
+                    var result = _dijkstraSolver.Solve(startNode, endNode, (path) =>
                     {
                         // Enfileira atualização para thread principal
                         lock (_queueLock)
                         {
-                            _pathUpdateQueue.Enqueue(new List<int>(path));
+                            _pathUpdateQueue.Enqueue([.. path]);
                         }
                     }, _debugMode);
                     
@@ -326,6 +339,44 @@ public class MainGame : Game
         _previousMouseState = _currentMouseState;
         _currentMouseState = Mouse.GetState();
         
+        // Detectar clique no grafo para selecionar nós
+        if (!_isSearching && _currentMouseState.LeftButton == ButtonState.Pressed && 
+            _previousMouseState.LeftButton == ButtonState.Released)
+        {
+            Vector2 clickPos = new Vector2(_currentMouseState.X, _currentMouseState.Y);
+            Vector2 graphOffset = new Vector2(SidebarWidth + GraphAreaMargin, GraphAreaMargin);
+            
+            int? clickedNode = _graphVisualizer?.GetNodeAtPosition(clickPos, graphOffset);
+            
+            if (clickedNode.HasValue)
+            {
+                // Se não tem nó inicial selecionado, seleciona como inicial
+                if (!_graphVisualizer.SelectedStartNode.HasValue)
+                {
+                    _graphVisualizer.SetStartNode(clickedNode.Value);
+                }
+                // Se já tem inicial mas não tem final, seleciona como final
+                else if (!_graphVisualizer.SelectedEndNode.HasValue)
+                {
+                    // Não permite selecionar o mesmo nó como inicial e final
+                    if (clickedNode.Value != _graphVisualizer.SelectedStartNode.Value)
+                    {
+                        _graphVisualizer.SetEndNode(clickedNode.Value);
+                    }
+                }
+                // Se já tem ambos, reinicia a seleção
+                else
+                {
+                    _graphVisualizer.ClearSelection();
+                    _graphVisualizer.SetStartNode(clickedNode.Value);
+                }
+                
+                // Limpa o caminho destacado ao mudar seleção
+                _graphVisualizer?.ClearHighlightedPath();
+                _lastResult = null;
+            }
+        }
+        
         _changeGraphButton?.Update(_currentMouseState, _previousMouseState);
         _bruteForceButton?.Update(_currentMouseState, _previousMouseState);
         _dijkstraButton?.Update(_currentMouseState, _previousMouseState);
@@ -362,6 +413,31 @@ public class MainGame : Game
         
         Vector2 labelPos = new(ButtonSpacing, ButtonSpacing + ButtonHeight + ButtonSpacing / 2 + 5);
         _spriteBatch.DrawString(_font, "ALGORITMOS:", labelPos, Color.Gray);
+        
+        // Mostrar nós selecionados
+        int selectionY = _graphics.PreferredBackBufferHeight - 180;
+        _spriteBatch.DrawString(_font, "SELECAO:", new Vector2(ButtonSpacing, selectionY), Color.Gray);
+        
+        if (_graphVisualizer?.SelectedStartNode.HasValue == true)
+        {
+            string startText = $"Inicio: {_graphVisualizer.SelectedStartNode.Value + 1}";
+            _spriteBatch.DrawString(_font, startText, new Vector2(ButtonSpacing, selectionY + 25), new Color(100, 200, 255));
+        }
+        else
+        {
+            _spriteBatch.DrawString(_font, "Inicio: (clique)", new Vector2(ButtonSpacing, selectionY + 25), Color.DarkGray);
+        }
+        
+        if (_graphVisualizer?.SelectedEndNode.HasValue == true)
+        {
+            string endText = $"Fim: {_graphVisualizer.SelectedEndNode.Value + 1}";
+            _spriteBatch.DrawString(_font, endText, new Vector2(ButtonSpacing, selectionY + 50), new Color(255, 200, 100));
+        }
+        else
+        {
+            _spriteBatch.DrawString(_font, "Fim: (clique)", new Vector2(ButtonSpacing, selectionY + 50), Color.DarkGray);
+        }
+        
     }
     
     private void DrawGraph()
@@ -389,7 +465,7 @@ public class MainGame : Game
                     _spriteBatch.DrawString(_font, "Buscando (Força Bruta)...", new Vector2(infoX, infoY), Color.Yellow);
                     _spriteBatch.DrawString(_font, $"Caminhos parciais: {_bruteForceSolver.PartialPathsExplored:N0}", 
                         new Vector2(infoX, infoY + 25), Color.White);
-                    _spriteBatch.DrawString(_font, $"Ciclos completos: {_bruteForceSolver.PathsExplored:N0}", 
+                    _spriteBatch.DrawString(_font, $"Caminhos completos: {_bruteForceSolver.PathsExplored:N0}", 
                         new Vector2(infoX, infoY + 50), Color.Gray);
                     
                     if (_bruteForceSolver.BestDistanceSoFar < int.MaxValue)
@@ -401,16 +477,14 @@ public class MainGame : Game
                 else if (_currentAlgorithm == "Dijkstra" && _dijkstraSolver != null)
                 {
                     // Informações durante a busca (Dijkstra)
-                    _spriteBatch.DrawString(_font, "Buscando (Dijkstra B&B)...", new Vector2(infoX, infoY), Color.Yellow);
-                    _spriteBatch.DrawString(_font, $"Caminhos parciais: {_dijkstraSolver.PartialPathsExplored:N0}", 
+                    _spriteBatch.DrawString(_font, "Buscando (Dijkstra)...", new Vector2(infoX, infoY), Color.Yellow);
+                    _spriteBatch.DrawString(_font, $"Nos explorados: {_dijkstraSolver.NodesExplored:N0}", 
                         new Vector2(infoX, infoY + 25), Color.White);
-                    _spriteBatch.DrawString(_font, $"Ciclos completos: {_dijkstraSolver.PathsExplored:N0}", 
-                        new Vector2(infoX, infoY + 50), Color.Gray);
                     
                     if (_dijkstraSolver.BestDistanceSoFar < int.MaxValue)
                     {
-                        _spriteBatch.DrawString(_font, $"Melhor distancia: {_dijkstraSolver.BestDistanceSoFar}", 
-                            new Vector2(infoX, infoY + 75), Color.Lime);
+                        _spriteBatch.DrawString(_font, $"Distancia atual: {_dijkstraSolver.BestDistanceSoFar}", 
+                            new Vector2(infoX, infoY + 50), Color.Lime);
                     }
                 }
             }
@@ -446,16 +520,15 @@ public class MainGame : Game
         try
         {
             string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            List<string> output = new()
-            {
+            List<string> output =
+            [
                 "=".PadRight(80, '='),
                 $"Log gerado em: {timestamp}",
                 $"Grafo: {_currentGraphType}",
                 "=".PadRight(80, '='),
-                ""
-            };
-            
-            output.AddRange(logs);
+                "",
+                .. logs,
+            ];
             
             File.WriteAllLines(filename, output);
             Console.WriteLine($"[DEBUG] Logs salvos em: {filename}");

@@ -4,19 +4,12 @@ using System.Diagnostics;
 
 namespace MinimalRoutes.Algorithms;
 
-public class BruteForceSolver
+public class BruteForceSolver(int?[,] distanceMatrix)
 {
-    private readonly int?[,] _distanceMatrix;
-    private readonly int _numNodes;
+    private readonly int?[,] _distanceMatrix = distanceMatrix;
+    private readonly int _numNodes = distanceMatrix.GetLength(0);
     private readonly object _lock = new();
-
-    public BruteForceSolver(int?[,] distanceMatrix)
-    {
-        _distanceMatrix = distanceMatrix;
-        _numNodes = distanceMatrix.GetLength(0);
-    }
-
-    private List<int> _currentPath = new();
+    private List<int> _currentPath = [];
     public List<int> CurrentPath 
     { 
         get 
@@ -33,14 +26,14 @@ public class BruteForceSolver
     public int BestDistanceSoFar { get; private set; } = int.MaxValue;
     public bool IsRunning { get; private set; }
     
-    private List<string> _logs = new();
+    private List<string> _logs = [];
     public List<string> Logs
     {
         get
         {
             lock (_lock)
             {
-                return new List<string>(_logs);
+                return [.. _logs];
             }
         }
     }
@@ -52,13 +45,22 @@ public class BruteForceSolver
 
         try
         {
-            if (startNode < 0 || startNode >= _numNodes)
+            if (startNode < 0 || startNode >= _numNodes || endNode < 0 || endNode >= _numNodes)
             {
                 result.Success = false;
-                result.Message = "Nó inicial inválido";
+                result.Message = "Nós inicial ou final inválidos";
                 return result;
             }
             
+            if (startNode == endNode)
+            {
+                result.Success = true;
+                result.BestPath = [startNode];
+                result.BestDistance = 0;
+                result.Message = "Nó inicial é igual ao final";
+                return result;
+            }
+
             IsRunning = true;
             int bestDistance = int.MaxValue;
             List<int> bestPath = [];
@@ -75,8 +77,8 @@ public class BruteForceSolver
             {
                 lock (_lock)
                 {
-                    _logs.Add($"[INÍCIO] Algoritmo Brute Force (força bruta)");
-                    _logs.Add($"[INFO] Iniciando busca exaustiva do nó {startNode}");
+                    _logs.Add($"[INICIO] Algoritmo Brute Force - Menor Caminho");
+                    _logs.Add($"[INFO] Buscando todos os caminhos de {startNode} ate {endNode}");
                 }
             }
             
@@ -96,72 +98,62 @@ public class BruteForceSolver
                 {
                     lock (_lock)
                     {
-                        _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", currentPath)}] | Distância acumulada: {currentDistance}");
+                        _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", currentPath)}] | Distancia acumulada: {currentDistance}");
                     }
                 }
                 
-                // Notifica o caminho atual sendo explorado
-                onPathUpdate?.Invoke(new List<int>(currentPath));
+                onPathUpdate?.Invoke([.. currentPath]);
 
-                if (visited.Count == _numNodes)
+                if (currentNode == endNode)
+                {
+                    PathsExplored++;
+                    
+                    if (enableLog)
                     {
-                        int? returnDistance = _distanceMatrix[currentNode, startNode];
-                        if (returnDistance.HasValue && returnDistance.Value > 0)
+                        lock (_lock)
                         {
-                            PathsExplored++;
-                            int totalDistance = currentDistance + returnDistance.Value;
-                            
-                            if (enableLog)
+                            _logs.Add($"[CAMINHO] Caminho completo #{PathsExplored}: [{string.Join(", ", currentPath)}] | Distancia: {currentDistance}");
+                        }
+                    }
+                    
+                    if (currentDistance < bestDistance)
+                    {
+                        bestDistance = currentDistance;
+                        bestPath = [.. currentPath];
+                        BestDistanceSoFar = bestDistance;
+                        
+                        if (enableLog)
+                        {
+                            lock (_lock)
                             {
-                                lock (_lock)
-                                {
-                                    List<int> completePath = [.. currentPath];
-                                    completePath.Add(startNode);
-                                    _logs.Add($"[CICLO] Ciclo #{PathsExplored}: [{string.Join(", ", completePath)}] | Distância: {totalDistance}");
-                                }
-                            }
-                            
-                            if (totalDistance < bestDistance)
-                            {
-                                bestDistance = totalDistance;
-                                bestPath = [.. currentPath];
-                                bestPath.Add(startNode); // Adiciona o retorno ao início
-                                BestDistanceSoFar = bestDistance;
-                                
-                                if (enableLog)
-                                {
-                                    lock (_lock)
-                                    {
-                                        _logs.Add($"[MELHOR] Novo melhor caminho encontrado: [{string.Join(", ", bestPath)}] | Distancia: {bestDistance}");
-                                    }
-                                }
-                                
-                                // Notifica quando encontrar um caminho melhor
-                                onPathUpdate?.Invoke(new List<int>(bestPath));
+                                _logs.Add($"[MELHOR] Novo melhor caminho encontrado: [{string.Join(", ", bestPath)}] | Distancia: {bestDistance}");
                             }
                         }
-                        return;
+                        
+                        onPathUpdate?.Invoke([.. bestPath]);
                     }
+                    return;
+                }
 
-                    for (int nextNode = 0; nextNode < _numNodes; nextNode++)
-                    {
-                        if (visited.Contains(nextNode))
-                            continue;
+                for (int nextNode = 0; nextNode < _numNodes; nextNode++)
+                {
+                    if (visited.Contains(nextNode))
+                        continue;
 
-                        int? distance = _distanceMatrix[currentNode, nextNode];
-                        if (!distance.HasValue || distance.Value == 0)
-                            continue;
+                    int? distance = _distanceMatrix[currentNode, nextNode];
+                    if (!distance.HasValue || distance.Value == 0)
+                        continue;
 
-                        int newDistance = currentDistance + distance.Value;
+                    int newDistance = currentDistance + distance.Value;
 
-                        currentPath.Add(nextNode);
-                        visited.Add(nextNode);
+                    currentPath.Add(nextNode);
+                    visited.Add(nextNode);
 
-                        ExplorePaths(nextNode, newDistance);
+                    ExplorePaths(nextNode, newDistance);
 
-                        currentPath.RemoveAt(currentPath.Count - 1);
-                        visited.Remove(nextNode);
-                    }
+                    currentPath.RemoveAt(currentPath.Count - 1);
+                    visited.Remove(nextNode);
+                }
             }
 
             ExplorePaths(startNode, 0);
@@ -174,7 +166,7 @@ public class BruteForceSolver
                 {
                     _logs.Add($"[FIM] Algoritmo finalizado em {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
                     _logs.Add($"[STATS] Caminhos parciais explorados: {PartialPathsExplored:N0}");
-                    _logs.Add($"[STATS] Ciclos completos testados: {PathsExplored}");
+                    _logs.Add($"[STATS] Caminhos completos encontrados: {PathsExplored}");
                 }
             }
 

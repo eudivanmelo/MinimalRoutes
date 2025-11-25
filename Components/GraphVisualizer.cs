@@ -13,6 +13,8 @@ public class GraphVisualizer
     private readonly Dictionary<int, Vector2> _nodePositions;
     private readonly List<(int from, int to, int weight)> _edges;
     private List<int> _currentHighlightedPath;
+    private int? _selectedStartNode = null;
+    private int? _selectedEndNode = null;
     
     private const int NodeRadius = 20;
     private readonly int _width;
@@ -26,6 +28,8 @@ public class GraphVisualizer
     private readonly Color _nodeTextColor = Color.White;
     private readonly Color _highlightedEdgeColor = new(255, 100, 100);
     private readonly Color _highlightedNodeColor = new(100, 255, 100);
+    private readonly Color _selectedStartNodeColor = new(100, 200, 255); // Azul para nó inicial
+    private readonly Color _selectedEndNodeColor = new(255, 200, 100);   // Laranja para nó final
     
     private const float EdgeThickness = 1.5f;
     private const float HighlightedEdgeThickness = 3f;
@@ -73,6 +77,52 @@ public class GraphVisualizer
     {
         _currentHighlightedPath = null;
     }
+    
+    /// <summary>
+    /// Define o nó inicial selecionado
+    /// </summary>
+    public void SetStartNode(int? node)
+    {
+        _selectedStartNode = node;
+    }
+    
+    /// <summary>
+    /// Define o nó final selecionado
+    /// </summary>
+    public void SetEndNode(int? node)
+    {
+        _selectedEndNode = node;
+    }
+    
+    /// <summary>
+    /// Limpa a seleção de nós
+    /// </summary>
+    public void ClearSelection()
+    {
+        _selectedStartNode = null;
+        _selectedEndNode = null;
+    }
+    
+    /// <summary>
+    /// Retorna o nó clicado na posição especificada, ou null se não houver
+    /// </summary>
+    public int? GetNodeAtPosition(Vector2 clickPosition, Vector2 offset)
+    {
+        foreach (var (node, pos) in _nodePositions)
+        {
+            Vector2 nodeScreenPos = pos + offset;
+            float distance = Vector2.Distance(clickPosition, nodeScreenPos);
+            
+            if (distance <= NodeRadius)
+            {
+                return node;
+            }
+        }
+        return null;
+    }
+    
+    public int? SelectedStartNode => _selectedStartNode;
+    public int? SelectedEndNode => _selectedEndNode;
     
     /// <summary>
     /// Desenha o grafo completo
@@ -133,7 +183,7 @@ public class GraphVisualizer
         
         for (int iter = 0; iter < iterations; iter++)
         {
-            Dictionary<int, Vector2> displacement = new();
+            Dictionary<int, Vector2> displacement = [];
             
             // Inicializar deslocamentos
             for (int i = 0; i < nodeCount; i++)
@@ -236,9 +286,33 @@ public class GraphVisualizer
         {
             Vector2 position = node.Value + offset;
             bool isHighlighted = _currentHighlightedPath?.Contains(node.Key) ?? false;
+            bool isStartNode = _selectedStartNode.HasValue && _selectedStartNode.Value == node.Key;
+            bool isEndNode = _selectedEndNode.HasValue && _selectedEndNode.Value == node.Key;
             
-            Color nodeColor = isHighlighted ? _highlightedNodeColor : _nodeColor;
-            Color borderColor = isHighlighted ? Color.DarkGreen : _nodeBorderColor;
+            Color nodeColor;
+            Color borderColor;
+            
+            // Prioridade: nós selecionados > caminho destacado > nós normais
+            if (isStartNode)
+            {
+                nodeColor = _selectedStartNodeColor;
+                borderColor = Color.DarkBlue;
+            }
+            else if (isEndNode)
+            {
+                nodeColor = _selectedEndNodeColor;
+                borderColor = Color.DarkOrange;
+            }
+            else if (isHighlighted)
+            {
+                nodeColor = _highlightedNodeColor;
+                borderColor = Color.DarkGreen;
+            }
+            else
+            {
+                nodeColor = _nodeColor;
+                borderColor = _nodeBorderColor;
+            }
             
             DrawCircle(spriteBatch, position, NodeRadius, nodeColor, borderColor);
             

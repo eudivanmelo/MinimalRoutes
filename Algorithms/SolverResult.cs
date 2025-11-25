@@ -5,7 +5,7 @@ namespace MinimalRoutes.Algorithms;
 
 public class SolverResult
 {
-    public List<int> BestPath { get; set; } = new();
+    public List<int> BestPath { get; set; } = [];
     public int BestDistance { get; set; }
     public long PathsChecked { get; set; }
     public long PartialPathsExplored { get; set; }

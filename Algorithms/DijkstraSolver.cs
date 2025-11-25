@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 
 namespace MinimalRoutes.Algorithms;
@@ -11,20 +10,6 @@ public class DijkstraSolver(int?[,] distanceMatrix)
     private readonly int?[,] _distanceMatrix = distanceMatrix;
     private readonly int _numNodes = distanceMatrix.GetLength(0);
     private readonly Lock _lock = new();
-
-    private class SearchState : IComparable<SearchState>
-    {
-        public int CurrentNode { get; set; }
-        public List<int> Path { get; set; }
-        public HashSet<int> Visited { get; set; }
-        public int CurrentDistance { get; set; }
-
-        public int CompareTo(SearchState other)
-        {
-            return CurrentDistance.CompareTo(other.CurrentDistance);
-        }
-    }
-
     private List<int> _currentPath = [];
     public List<int> CurrentPath 
     { 
@@ -37,12 +22,11 @@ public class DijkstraSolver(int?[,] distanceMatrix)
         } 
     }
     
-    public long PathsExplored { get; private set; }
-    public long PartialPathsExplored { get; private set; }
+    public long NodesExplored { get; private set; }
     public int BestDistanceSoFar { get; private set; } = int.MaxValue;
     public bool IsRunning { get; private set; }
     
-    private readonly List<string> _logs = [];
+    private List<string> _logs = [];
     public List<string> Logs
     {
         get
@@ -61,16 +45,24 @@ public class DijkstraSolver(int?[,] distanceMatrix)
 
         try
         {
-            if (startNode < 0 || startNode >= _numNodes)
+            if (startNode < 0 || startNode >= _numNodes || endNode < 0 || endNode >= _numNodes)
             {
                 result.Success = false;
-                result.Message = "Nó inicial inválido";
+                result.Message = "Nós inicial ou final inválidos";
+                return result;
+            }
+
+            if (startNode == endNode)
+            {
+                result.Success = true;
+                result.BestPath = [startNode];
+                result.BestDistance = 0;
+                result.Message = "Nó inicial é igual ao final";
                 return result;
             }
 
             IsRunning = true;
-            PathsExplored = 0;
-            PartialPathsExplored = 0;
+            NodesExplored = 0;
             BestDistanceSoFar = int.MaxValue;
             
             lock (_lock)
@@ -82,136 +74,81 @@ public class DijkstraSolver(int?[,] distanceMatrix)
             {
                 lock (_lock)
                 {
-                    _logs.Add($"[INÍCIO] Algoritmo Priority Queue (Dijkstra adaptado para TSP)");
-                    _logs.Add($"[INFO] Iniciando busca do nó {startNode}");
+                    _logs.Add($"[INICIO] Algoritmo de Dijkstra - Menor Caminho");
+                    _logs.Add($"[INFO] Buscando caminho de {startNode} ate {endNode}");
                 }
             }
 
-            int bestDistance = int.MaxValue;
-            List<int> bestPath = null;
+            PriorityQueue<(int node, int distance), int> priorityQueue = new();
+            Dictionary<int, int> distances = [];
+            Dictionary<int, int> previous = [];
+            HashSet<int> visited = [];
 
-            PriorityQueue<SearchState, int> priorityQueue = new();
-            
-            var initialState = new SearchState
+            for (int i = 0; i < _numNodes; i++)
             {
-                CurrentNode = startNode,
-                Path = [startNode],
-                Visited = [startNode],
-                CurrentDistance = 0
-            };
-            
-            priorityQueue.Enqueue(initialState, initialState.CurrentDistance);
+                distances[i] = int.MaxValue;
+            }
+            distances[startNode] = 0;
 
-            Dictionary<string, int> bestKnown = [];
+            priorityQueue.Enqueue((startNode, 0), 0);
 
             while (priorityQueue.Count > 0)
             {
-                var state = priorityQueue.Dequeue();
-                PartialPathsExplored++;
+                var (currentNode, currentDistance) = priorityQueue.Dequeue();
                 
+                if (visited.Contains(currentNode))
+                    continue;
+
+                visited.Add(currentNode);
+                NodesExplored++;
+
+                List<int> currentPath = ReconstructPath(previous, startNode, currentNode);
+                
+                lock (_lock)
+                {
+                    _currentPath = [.. currentPath];
+                }
+                onPathUpdate?.Invoke([.. currentPath]);
+
                 if (enableLog)
                 {
                     lock (_lock)
                     {
-                        _logs.Add($"[EXPLORANDO] Caminho: [{string.Join(", ", state.Path)}] | Distância: {state.CurrentDistance}");
+                        _logs.Add($"[EXPLORANDO] No: {currentNode} | Distancia: {currentDistance} | Caminho: [{string.Join(", ", currentPath)}]");
                     }
                 }
-                
-                lock (_lock)
-                {
-                    _currentPath = [.. state.Path];
-                }
-                onPathUpdate?.Invoke([.. state.Path]);
 
-                if (state.CurrentDistance >= bestDistance)
+                if (currentNode == endNode)
                 {
+                    BestDistanceSoFar = currentDistance;
+                    
                     if (enableLog)
                     {
                         lock (_lock)
                         {
-                            _logs.Add($"[PODADO] Caminho descartado (distância {state.CurrentDistance} >= melhor {bestDistance})");
+                            _logs.Add($"[SOLUCAO] Caminho encontrado: [{string.Join(", ", currentPath)}] | Distancia: {currentDistance}");
                         }
                     }
-                    continue;
+                    break;
                 }
 
-                if (state.Visited.Count == _numNodes)
+                for (int neighbor = 0; neighbor < _numNodes; neighbor++)
                 {
-                    int? returnDistance = _distanceMatrix[state.CurrentNode, startNode];
-                    if (returnDistance.HasValue && returnDistance.Value > 0)
+                    if (visited.Contains(neighbor))
+                        continue;
+
+                    int? edgeWeight = _distanceMatrix[currentNode, neighbor];
+                    if (!edgeWeight.HasValue || edgeWeight.Value <= 0)
+                        continue;
+
+                    int newDistance = currentDistance + edgeWeight.Value;
+
+                    if (newDistance < distances[neighbor])
                     {
-                        int totalDistance = state.CurrentDistance + returnDistance.Value;
-                        
-                        if (totalDistance < bestDistance)
-                        {
-                            PathsExplored++;
-                            bestDistance = totalDistance;
-                            bestPath = [.. state.Path];
-                            bestPath.Add(startNode);
-                            BestDistanceSoFar = bestDistance;
-                            
-                            if (enableLog)
-                            {
-                                lock (_lock)
-                                {
-                                    _logs.Add($"[SOLUCAO] Ciclo completo encontrado: [{string.Join(", ", bestPath)}] | Distancia: {bestDistance}");
-                                }
-                            }
-                            
-                            lock (_lock)
-                            {
-                                _currentPath = [.. bestPath];
-                            }
-                            
-                            onPathUpdate?.Invoke([.. bestPath]);
-                        }
+                        distances[neighbor] = newDistance;
+                        previous[neighbor] = currentNode;
+                        priorityQueue.Enqueue((neighbor, newDistance), newDistance);
                     }
-                    continue;
-                }
-
-                string stateKey = $"{state.CurrentNode}:{string.Join(",", state.Visited.Order())}";
-                
-                if (bestKnown.TryGetValue(stateKey, out int knownDistance))
-                {
-                    if (state.CurrentDistance >= knownDistance)
-                    {
-                        if (enableLog)
-                        {
-                            lock (_lock)
-                            {
-                                _logs.Add($"[MEMO] Estado já visitado com menor distância ({knownDistance} vs {state.CurrentDistance})");
-                            }
-                        }
-                        continue;
-                    }
-                }
-                bestKnown[stateKey] = state.CurrentDistance;
-
-                for (int nextNode = 0; nextNode < _numNodes; nextNode++)
-                {
-                    if (state.Visited.Contains(nextNode))
-                        continue;
-
-                    int? distance = _distanceMatrix[state.CurrentNode, nextNode];
-                    if (!distance.HasValue || distance.Value <= 0)
-                        continue;
-
-                    int newDistance = state.CurrentDistance + distance.Value;
-                    
-                    if (newDistance >= bestDistance)
-                        continue;
-
-                    var newVisited = new HashSet<int>(state.Visited) { nextNode };
-                    
-                    var newState = new SearchState
-                    {
-                        CurrentNode = nextNode,
-                        Path = [.. state.Path, nextNode],
-                        Visited = newVisited,
-                        CurrentDistance = newDistance
-                    };
-
-                    priorityQueue.Enqueue(newState, newState.CurrentDistance);
                 }
             }
 
@@ -222,29 +159,29 @@ public class DijkstraSolver(int?[,] distanceMatrix)
                 lock (_lock)
                 {
                     _logs.Add($"[FIM] Algoritmo finalizado em {stopwatch.Elapsed.TotalMilliseconds:F2}ms");
-                    _logs.Add($"[STATS] Caminhos parciais explorados: {PartialPathsExplored:N0}");
-                    _logs.Add($"[STATS] Ciclos completos encontrados: {PathsExplored}");
-                    _logs.Add($"[STATS] Estados únicos visitados: {bestKnown.Count}");
+                    _logs.Add($"[STATS] Nos explorados: {NodesExplored}");
                 }
             }
 
-            if (bestPath != null && bestDistance < int.MaxValue)
+            if (distances[endNode] < int.MaxValue)
             {
-                result.BestPath = bestPath;
-                result.BestDistance = bestDistance;
-                result.PathsChecked = PathsExplored;
-                result.PartialPathsExplored = PartialPathsExplored;
+                List<int> finalPath = ReconstructPath(previous, startNode, endNode);
+                
+                result.BestPath = finalPath;
+                result.BestDistance = distances[endNode];
+                result.PathsChecked = NodesExplored;
+                result.PartialPathsExplored = NodesExplored;
                 result.ElapsedTime = stopwatch.Elapsed;
                 result.Success = true;
-                result.Message = $"Caminho ótimo encontrado com distância {bestDistance}";
-                BestDistanceSoFar = bestDistance;
+                result.Message = $"Caminho encontrado com distancia {distances[endNode]}";
+                BestDistanceSoFar = distances[endNode];
             }
             else
             {
                 result.Success = false;
-                result.Message = "Não foi possível encontrar um caminho válido";
+                result.Message = "Nao existe caminho entre os nos";
                 result.ElapsedTime = stopwatch.Elapsed;
-                result.PartialPathsExplored = PartialPathsExplored;
+                result.PartialPathsExplored = NodesExplored;
             }
 
             IsRunning = false;
@@ -259,5 +196,24 @@ public class DijkstraSolver(int?[,] distanceMatrix)
         }
 
         return result;
+    }
+
+    private static List<int> ReconstructPath(Dictionary<int, int> previous, int start, int end)
+    {
+        List<int> path = [];
+        int current = end;
+
+        while (current != start)
+        {
+            path.Add(current);
+            if (!previous.TryGetValue(current, out int value))
+                return [start];
+                
+            current = value;
+        }
+        
+        path.Add(start);
+        path.Reverse();
+        return path;
     }
 }

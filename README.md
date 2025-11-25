@@ -1,21 +1,22 @@
 # MinimalRoutes
 
-Sistema de visualização e comparação de algoritmos para resolução do Problema do Caixeiro Viajante (TSP - Travelling Salesman Problem).
+Sistema de visualização e comparação de algoritmos para encontrar o menor caminho entre dois pontos em grafos ponderados.
 
 ## Sobre o Projeto
 
-Este projeto foi desenvolvido para a disciplina de Estrutura de Dados Não Lineares do curso de Análise e Desenvolvimento de Sistemas. O objetivo é implementar e comparar diferentes algoritmos de busca aplicados ao problema do ciclo hamiltoniano em grafos ponderados.
+Este projeto foi desenvolvido para a disciplina de Estrutura de Dados Não Lineares do curso de Análise e Desenvolvimento de Sistemas. O objetivo é implementar e comparar diferentes algoritmos de busca do menor caminho entre dois nós em grafos ponderados.
 
 ## Funcionalidades
 
 - Visualização interativa de grafos com layout force-directed (Fruchterman-Reingold)
+- Seleção de nós inicial e final através de cliques
 - Implementação de dois algoritmos de busca:
-  - **Brute Force**: Busca exaustiva de todas as permutações possíveis
-  - **Dijkstra adaptado para TSP**: Utiliza Priority Queue com Branch and Bound e heurísticas de poda
+  - **Brute Force**: Busca exaustiva de todos os caminhos possíveis entre dois nós
+  - **Dijkstra**: Algoritmo clássico de menor caminho com relaxação de arestas
 - Comparação de desempenho entre algoritmos
 - Visualização em tempo real do caminho sendo explorado
 - Modo de debug com geração de logs detalhados
-- Estatísticas de execução (tempo, caminhos parciais explorados, ciclos completos)
+- Estatísticas de execução (tempo, nós explorados, caminhos verificados)
 
 ## Tecnologias Utilizadas
 
@@ -25,17 +26,16 @@ Este projeto foi desenvolvido para a disciplina de Estrutura de Dados Não Linea
 ## Algoritmos Implementados
 
 ### Brute Force
-- Explora todas as permutações possíveis de caminhos
+- Explora todos os caminhos possíveis entre o nó inicial e final
 - Complexidade: O(n!)
 - Adequado apenas para grafos pequenos (até ~10 nós)
 
-### Dijkstra com Priority Queue (Adaptado para TSP)
-- Utiliza fila de prioridade para explorar caminhos mais promissores primeiro
-- Implementa técnicas de poda:
-  - Branch and Bound
-  - Memoização de estados
-  - Heurística de lower bound (estimativa de custo restante)
-- Reduz drasticamente o número de estados explorados
+### Dijkstra
+- Algoritmo clássico de menor caminho
+- Utiliza fila de prioridade para explorar nós mais próximos primeiro
+- Implementa relaxação de arestas
+- Complexidade: O((V + E) log V)
+- Eficiente para grafos de qualquer tamanho
 
 ## Requisitos
 
@@ -70,34 +70,40 @@ Ao executar com `--debug`, o sistema gera arquivos de log detalhados:
 
 Os logs contêm:
 - Timestamp de execução
-- Todos os caminhos parciais explorados
-- Decisões de poda
-- Soluções encontradas
+- Todos os caminhos/nós explorados
+- Operações de relaxação
+- Solução encontrada
 - Estatísticas finais
 
 ## Uso da Aplicação
 
-1. **Trocar Grafo**: Alterna entre grafo simples (5 nós) e complexo (18 nós)
-2. **Força Bruta**: Executa o algoritmo de busca exaustiva
-3. **Dijkstra TSP**: Executa o algoritmo otimizado com Priority Queue
+1. **Selecionar Nós**: 
+   - Clique em um nó para selecioná-lo como ponto inicial (azul)
+   - Clique em outro nó para selecioná-lo como ponto final (laranja)
+   - Clique novamente para limpar a seleção
+   - Se nenhum nó for selecionado, o algoritmo usará nó 0 como inicial e último nó como final
+
+2. **Trocar Grafo**: Alterna entre grafo simples (5 nós) e complexo (18 nós)
+
+3. **Força Bruta**: Executa o algoritmo de busca exaustiva entre os nós selecionados
+
+4. **Dijkstra**: Executa o algoritmo clássico de Dijkstra entre os nós selecionados
 
 Durante a execução:
 - O caminho atual sendo explorado é destacado em tempo real
 - Estatísticas são atualizadas continuamente
 - A interface mostra:
-  - Número de caminhos parciais explorados
-  - Número de ciclos completos encontrados
+  - Nós selecionados (inicial e final)
+  - Número de caminhos/nós explorados
   - Melhor distância encontrada até o momento
   - Tempo de execução
 
 ## Comparação de Performance
 
-Exemplo de resultados em grafo complexo (18 nós):
+Os algoritmos têm características diferentes:
 
-| Algoritmo | Caminhos Parciais | Tempo |
-|-----------|------------------|-------|
-| Brute Force | 1.833.869 | ~0,78s |
-| Dijkstra TSP | 207.443 | ~0,61s |
+- **Brute Force**: Garante encontrar o menor caminho, mas explora todos os caminhos possíveis. Tempo cresce exponencialmente.
+- **Dijkstra**: Algoritmo eficiente que garante encontrar o menor caminho em grafos com pesos positivos. Cresce de forma logarítmica.
 
 ## Licença
 
