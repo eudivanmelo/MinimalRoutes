@@ -71,8 +71,6 @@ Ao executar com `--debug`, o sistema gera arquivos de log detalhados:
 Os logs contêm:
 - Timestamp de execução
 - Todos os caminhos/nós explorados
-- Operações de relaxação
-- Solução encontrada
 - Estatísticas finais
 
 ## Uso da Aplicação
@@ -83,9 +81,9 @@ Os logs contêm:
    - Clique novamente para limpar a seleção
    - Se nenhum nó for selecionado, o algoritmo usará nó 0 como inicial e último nó como final
 
-2. **Trocar Grafo**: Alterna entre grafo simples (5 nós) e complexo (18 nós)
+2. **Trocar Grafo**: Alterna entre os grafos
 
-3. **Força Bruta**: Executa o algoritmo de busca exaustiva entre os nós selecionados
+3. **Força Bruta**: Executa o algoritmo de força bruta entre os nós selecionados
 
 4. **Dijkstra**: Executa o algoritmo clássico de Dijkstra entre os nós selecionados
 
@@ -100,11 +98,3 @@ Durante a execução:
 
 ## Comparação de Performance
 
-Os algoritmos têm características diferentes:
-
-- **Brute Force**: Garante encontrar o menor caminho, mas explora todos os caminhos possíveis. Tempo cresce exponencialmente.
-- **Dijkstra**: Algoritmo eficiente que garante encontrar o menor caminho em grafos com pesos positivos. Cresce de forma logarítmica.
-
-## Licença
-
-Este projeto foi desenvolvido para fins educacionais.
