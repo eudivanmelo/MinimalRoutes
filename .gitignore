@@ -44,7 +44,6 @@ project.fragment.lock.json
 # MonoGame Content Builder
 **/Content/bin/
 **/Content/obj/
-*.mgcb
 *.mgcontent
 
 # Debug log files
